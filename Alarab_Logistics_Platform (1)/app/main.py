@@ -23,8 +23,18 @@ from sqlalchemy.orm import declarative_base, sessionmaker, Session, relationship
 load_dotenv()
 
 SECRET = os.getenv("APP_SECRET", "DEV_ONLY_CHANGE_THIS_SECRET_IMMEDIATELY")
-DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:////tmp/alarab.db")
-engine_args = {"connect_args": {"check_same_thread": False}} if DATABASE_URL.startswith("sqlite") else {}
+
+# Database URL — Railway Postgres or local SQLite fallback
+_raw_db = (os.getenv("DATABASE_URL") or os.getenv("POSTGRES_URL") or "").strip()
+if not _raw_db or "://" not in _raw_db:
+    DATABASE_URL = "sqlite:////tmp/alarab.db"
+else:
+    # SQLAlchemy prefers postgresql:// (Railway sometimes gives postgres://)
+    if _raw_db.startswith("postgres://"):
+        _raw_db = "postgresql://" + _raw_db[len("postgres://"):]
+    DATABASE_URL = _raw_db
+
+engine_args = {"connect_args": {"check_same_thread": False}} if DATABASE_URL.startswith("sqlite") else {"pool_pre_ping": True}
 engine = create_engine(DATABASE_URL, **engine_args)
 SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False)
 Base = declarative_base()
